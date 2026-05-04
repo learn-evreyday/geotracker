@@ -7,47 +7,71 @@
 - **React + Vite + Tailwind + Leaflet**: dashboard with stats, map legend, alert bell, company summary for the **GeoTrackr** demo fleet
 - **Nginx**: reverse proxy `/api/*` → backend
 
+## Security: never commit `.env`
+
+- **Do not** push `.env`, `.env.local`, or any file containing real credentials to GitHub (or any public repository).
+- These files typically hold **secrets**: database passwords, **JWT signing keys**, **InfluxDB tokens**, API keys, and demo passwords. Committing them exposes your infrastructure and invalidates tokens.
+- The repository includes **`.env.example`** files (backend and frontend) with **placeholders only**. Copy them to `.env`, replace values locally, and rely on `.gitignore` to exclude real env files from commits.
+
+## Environment Variables
+
+Configuration is **not** bundled in the repo. You must **create environment files yourself**:
+
+| Location | Purpose |
+|----------|---------|
+| **`backend/.env`** | PostgreSQL, InfluxDB, JWT, seed/simulator options when running the Node API locally or when your process loads dotenv. |
+| **`frontend/.env`** or **`frontend/.env.local`** | Optional Vite variables (e.g. `VITE_API_BASE`) for local dev. |
+| **Repo root `.env`** (optional) | Used by **Docker Compose** variable substitution (e.g. `PGPASSWORD`, `INFLUX_TOKEN`); same security rules apply. |
+
+1. Copy the examples: `cp backend/.env.example backend/.env` and, if needed, `cp frontend/.env.example frontend/.env.local`.
+2. Edit the new files and set **your own** secrets and hosts. Do not reuse sample passwords from documentation.
+
+The Node backend **does not load `dotenv` by default**. For local `npm start`, export variables in your shell (see [Run backend locally](#run-backend-locally-without-docker)), use your IDE’s env runner, or add a small `dotenv` bootstrap yourself. **Docker Compose** passes variables from the repo root `.env` into containers as configured in `docker-compose.yml`.
+
+The backend reads **individual PostgreSQL settings** (`PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, …) as implemented in `backend/src/db.js`. A single `DATABASE_URL` is **not** used by default; you can keep one in `.env` only for other tooling if you wish.
+
+### Example: `backend/.env` (placeholders only)
+
+Do **not** copy this block verbatim into production; replace every placeholder.
+
+```env
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=geotracker
+PGUSER=your-user
+PGPASSWORD=your-password
+
+DATABASE_URL=postgresql://user:password@localhost:5555/geotracker
+
+JWT_SECRET=your-secret-key
+
+INFLUX_URL=http://localhost:8888
+INFLUX_TOKEN=your-token
+INFLUX_ORG=your-org
+INFLUX_BUCKET=your-bucket
+
+SEED_DEMO=true
+```
+
+See **`backend/.env.example`** for the full list of variables (including auth expiry, rate limits, simulator, alerts).
+
+### Example: `frontend/.env.local` (optional)
+
+```env
+VITE_API_BASE=
+```
+
+Empty `VITE_API_BASE` is typical when the UI and API share the same origin (e.g. nginx proxies `/api`). Set to your API origin when developing against a separate backend URL.
+
 ## Run with Docker
+
+Create a **repo root** `.env` if you need to override Compose defaults (database password, Influx token, JWT secret, etc.). Never commit that file.
 
 ```bash
 docker compose up --build
 ```
 
 Open `http://localhost:8080`.
-
-### Recommended `.env`
-
-Create `.env` in repo root (example values):
-
-```bash
-INFLUX_USER=admin
-INFLUX_PASSWORD=adminpasswordchange
-INFLUX_ORG=apimonitor
-INFLUX_BUCKET=device_telemetry
-INFLUX_TOKEN=apimonitor-dev-token-replace-in-prod
-
-PGDATABASE=devicemonitor
-PGUSER=devicemonitor
-PGPASSWORD=devpasswordchange
-
-JWT_SECRET=dev-secret-change
-JWT_ACCESS_EXPIRES=15m
-REFRESH_TOKEN_DAYS=30
-AUTH_RATE_WINDOW_MS=60000
-AUTH_RATE_MAX=40
-SEED_DEMO=true
-SEED_DEMO_ADMIN=true
-DEMO_ADMIN_EMAIL=admin@demo.local
-DEMO_ADMIN_PASSWORD=demoAdmin123
-# Demo users (same password Demo1234!): user1@example.com … user3@example.com — 15 trackers (U1–U3 ONLINE/OFFLINE serials)
-# GeoTrackr company demo (when SEED_DEMO is not false): monitor@geotrackr.com / Monitor123! — 10 devices GT-TRACK-001…010 (6 online, 4 offline; simulator updates only 001–006)
-# GEOTRACKR_MONITOR_EMAIL=monitor@geotrackr.com
-# GEOTRACKR_MONITOR_PASSWORD=Monitor123!
-SIM_INTERVAL_MS=2000
-SIM_ENABLED=true
-# Alert sync: evaluate telemetry and create alerts (default 60s)
-# ALERT_SYNC_INTERVAL_MS=60000
-```
 
 ### Demo: GeoTrackr company
 
@@ -161,41 +185,41 @@ curl -sS "http://localhost:8080/api/devices/by-serial/TRK-2026-0001/history?rang
 
 ## Run backend locally (without Docker)
 
-You still need **InfluxDB** + **PostgreSQL** reachable from your machine.
+You still need **InfluxDB** + **PostgreSQL** reachable from your machine. Set variables from **`backend/.env`** by exporting them (example below uses placeholders — use your real values, never commit them).
 
 ### PowerShell (Windows)
 
 ```powershell
-cd d:\cursor\sitemaps\backend
+cd path\to\sitemaps\backend
 $env:INFLUX_URL="http://localhost:8086"
-$env:INFLUX_TOKEN="apimonitor-dev-token-replace-in-prod"
-$env:INFLUX_ORG="apimonitor"
-$env:INFLUX_BUCKET="device_telemetry"
+$env:INFLUX_TOKEN="your-token"
+$env:INFLUX_ORG="your-org"
+$env:INFLUX_BUCKET="your-bucket"
 $env:PGHOST="localhost"
 $env:PGPORT="5432"
-$env:PGDATABASE="devicemonitor"
-$env:PGUSER="devicemonitor"
-$env:PGPASSWORD="devpasswordchange"
-$env:JWT_SECRET="dev-secret-change"
+$env:PGDATABASE="geotracker"
+$env:PGUSER="your-user"
+$env:PGPASSWORD="your-password"
+$env:JWT_SECRET="your-secret-key"
 npm.cmd start
 ```
 
 ### WSL / bash
 
 ```bash
-cd /mnt/d/cursor/sitemaps/backend
+cd /path/to/sitemaps/backend
 export INFLUX_URL="http://localhost:8086"
-export INFLUX_TOKEN="apimonitor-dev-token-replace-in-prod"
-export INFLUX_ORG="apimonitor"
-export INFLUX_BUCKET="device_telemetry"
+export INFLUX_TOKEN="your-token"
+export INFLUX_ORG="your-org"
+export INFLUX_BUCKET="your-bucket"
 export PGHOST="localhost"
 export PGPORT="5432"
-export PGDATABASE="devicemonitor"
-export PGUSER="devicemonitor"
-export PGPASSWORD="devpasswordchange"
-export JWT_SECRET="dev-secret-change"
+export PGDATABASE="geotracker"
+export PGUSER="your-user"
+export PGPASSWORD="your-password"
+export JWT_SECRET="your-secret-key"
 npm start
 ```
 
-Backend prints `http://localhost:3000`.
+Backend prints `http://localhost:3000` (or the port from `PORT`).
 
