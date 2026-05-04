@@ -1,0 +1,102 @@
+services:
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: api-monitor-influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-adminpasswordchange}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-apimonitor}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-api_traffic}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-apimonitor-dev-token-replace-in-prod}
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: api-monitor-backend
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-apimonitor-dev-token-replace-in-prod}
+      INFLUX_ORG: ${INFLUX_ORG:-apimonitor}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-device_telemetry}
+      # Postgres
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${PGDATABASE:-devicemonitor}
+      PGUSER: ${PGUSER:-devicemonitor}
+      PGPASSWORD: ${PGPASSWORD:-devpasswordchange}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change}
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
+      AUTH_RATE_WINDOW_MS: ${AUTH_RATE_WINDOW_MS:-60000}
+      AUTH_RATE_MAX: ${AUTH_RATE_MAX:-40}
+      # Demo seed (set SEED_DEMO=false to skip)
+      SEED_DEMO: ${SEED_DEMO:-true}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@demo.local}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-demoAdmin123}
+      GEOTRACKR_MONITOR_EMAIL: ${GEOTRACKR_MONITOR_EMAIL:-monitor@geotrackr.com}
+      GEOTRACKR_MONITOR_PASSWORD: ${GEOTRACKR_MONITOR_PASSWORD:-Monitor123!}
+      # Simulator: interval ms (min 400)
+      SIM_INTERVAL_MS: ${SIM_INTERVAL_MS:-1000}
+      # Alert
+      ALERT_BATTERY_LOW: "20"
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: device-monitor-postgres
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-devicemonitor}
+      POSTGRES_USER: ${PGUSER:-devicemonitor}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-devpasswordchange}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: ""
+    container_name: api-monitor-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - appnet
+
+volumes:
+  influx_data:
+  pg_data:
+
+networks:
+  appnet:
+    driver: bridge
