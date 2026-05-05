@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   BrowserRouter,
@@ -34,6 +34,8 @@ import {
   Signal,
   WifiOff,
   BatteryWarning,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -63,6 +65,33 @@ import {
   markAlertReadApi,
   markAllAlertsReadApi,
 } from './api.js';
+
+const THEME_STORAGE_KEY = 'theme';
+
+const ThemeContext = createContext({
+  theme: 'dark',
+  setTheme: () => {},
+  toggleTheme: () => {},
+  isLight: false,
+  mapTiles: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: '' },
+});
+
+function useTheme() {
+  return useContext(ThemeContext);
+}
+
+function computeMapTiles(theme) {
+  if (theme === 'light') {
+    return {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors',
+    };
+  }
+  return {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  };
+}
 
 const REFRESH_CHOICES = [500, 1000, 2000, 5000, 10000];
 const HISTORY_RANGES = ['1h', '24h', '7d'];
@@ -544,6 +573,41 @@ function Shell({ auth, children }) {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const headerTitle = useMemo(() => resolveShellTitle(location.pathname, t), [location.pathname, t]);
+  const [theme, setTheme] = useState('dark'); // default
+
+  // Load saved theme on mount (default is dark).
+  useEffect(() => {
+    try {
+      const saved = String(localStorage.getItem(THEME_STORAGE_KEY) || '').toLowerCase();
+      if (saved === 'light') setTheme('light');
+      else setTheme('dark');
+    } catch {
+      setTheme('dark');
+    }
+  }, []);
+
+  // Apply theme to DOM + persist.
+  useEffect(() => {
+    const isLight = theme === 'light';
+    if (isLight) document.body.classList.add('light-mode');
+    else document.body.classList.remove('light-mode');
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, isLight ? 'light' : 'dark');
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
+
+  const themeValue = useMemo(() => {
+    const isLight = theme === 'light';
+    return {
+      theme,
+      setTheme,
+      toggleTheme: () => setTheme((p) => (p === 'light' ? 'dark' : 'light')),
+      isLight,
+      mapTiles: computeMapTiles(theme),
+    };
+  }, [theme]);
 
   useEffect(() => {
     document.title = t('browserTitle');
@@ -555,6 +619,7 @@ function Shell({ auth, children }) {
     }`;
 
   return (
+    <ThemeContext.Provider value={themeValue}>
     <div className="flex min-h-screen w-full bg-[#F8FAFC] text-gray-900">
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white md:sticky md:top-0 md:max-h-screen md:self-start md:overflow-y-auto">
         <div className="p-6 pb-4">
@@ -642,7 +707,18 @@ function Shell({ auth, children }) {
               {t('platformBadge')}
             </span>
           </div>
-          <AlertsBell />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => themeValue.toggleTheme()}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent/20"
+              aria-label={themeValue.isLight ? 'Switch to dark theme' : 'Switch to light theme'}
+            >
+              {themeValue.isLight ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {themeValue.isLight ? 'Light' : 'Dark'}
+            </button>
+            <AlertsBell />
+          </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-t border-gray-200 bg-white px-2 py-2 md:hidden">
@@ -700,6 +776,7 @@ function Shell({ auth, children }) {
         </nav>
       </div>
     </div>
+    </ThemeContext.Provider>
   );
 }
 
@@ -784,6 +861,7 @@ function LoginPage({ auth }) {
 function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { theme, mapTiles } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [refreshMs, setRefreshMs] = useState(2000);
   const [devices, setDevices] = useState([]);
@@ -1274,7 +1352,7 @@ function DashboardPage() {
           zoom={6}
           className="z-0 min-h-[380px] h-[58vh] max-h-[640px] w-full rounded-[22px] border border-gray-100 bg-white shadow-card"
         >
-          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer key={theme} attribution={mapTiles.attribution} url={mapTiles.url} />
           <style>{`
             @keyframes dmPulse {
               0% { transform: scale(1); filter: brightness(1); }
@@ -1569,6 +1647,7 @@ function OfflineInvestigationPage() {
 
 function HistoryPage() {
   const { t } = useTranslation();
+  const { theme, mapTiles } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [serial, setSerial] = useState(() => searchParams.get('serial') || '');
   const [range, setRange] = useState(() => {
@@ -1667,7 +1746,7 @@ function HistoryPage() {
             zoom={6}
             className="min-h-[320px] h-[50vh] max-h-[520px] w-full lg:min-h-[480px] lg:h-[480px]"
           >
-            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <TileLayer key={theme} attribution={mapTiles.attribution} url={mapTiles.url} />
             {path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.9 }} />}
             {last && Number.isFinite(last.latitude) && Number.isFinite(last.longitude) && (
               <Marker position={[last.latitude, last.longitude]} icon={markerIcon(lastMarkerColor)}>
@@ -1734,6 +1813,7 @@ function TrackerMapPage() {
   const { t } = useTranslation();
   const { serialNumber: serialParam } = useParams();
   const navigate = useNavigate();
+  const { theme, mapTiles } = useTheme();
   const serial = useMemo(() => decodeURIComponent(String(serialParam || '')).trim(), [serialParam]);
   const [range, setRange] = useState('24h');
   const [device, setDevice] = useState(null);
@@ -1910,8 +1990,9 @@ function TrackerMapPage() {
                 className="min-h-[380px] h-[55vh] max-h-[640px] w-full rounded-[22px]"
               >
                 <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  key={theme}
+                  attribution={mapTiles.attribution}
+                  url={mapTiles.url}
                 />
                 {path.length > 1 && (
                   <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.88 }} />
@@ -2448,6 +2529,7 @@ function DeviceDetailsPage() {
   const { deviceId } = useParams();
   const nav = useNavigate();
   const { t } = useTranslation();
+  const { theme, mapTiles } = useTheme();
   const me = useMe();
   const [range, setRange] = useState('24h');
   const [device, setDevice] = useState(null);
@@ -2647,7 +2729,7 @@ function DeviceDetailsPage() {
               className="h-[320px] w-full"
               key={`${latest.latitude}-${latest.longitude}`}
             >
-              <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <TileLayer key={theme} attribution={mapTiles.attribution} url={mapTiles.url} />
               {path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.9 }} />}
               <Marker position={[latest.latitude, latest.longitude]} icon={markerIcon(markerColor(mapSt))}>
                 <Popup>
