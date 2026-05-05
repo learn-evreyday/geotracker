@@ -9,10 +9,15 @@ async function maybeInsertAlert(deviceId, type, serial, latest) {
   );
   if (dup.rows.length) return;
 
-  const severity = type === 'offline' ? 'high' : 'medium';
+  const severity =
+    type === 'offline' || type === 'critical_battery' ? 'high' : 'medium';
   let message;
   if (type === 'offline') {
     message = `Tracker ${serial} is offline (no transmission in the last 24 hours).`;
+  } else if (type === 'critical_battery') {
+    const bat =
+      typeof latest?.batteryPercent === 'number' ? Math.round(latest.batteryPercent) : '?';
+    message = `Tracker ${serial} is offline with critical battery (${bat}%, last transmission).`;
   } else {
     const bat =
       typeof latest?.batteryPercent === 'number' ? Math.round(latest.batteryPercent) : '?';
@@ -38,6 +43,9 @@ export async function syncAlertsFromTelemetry() {
 
     if (latest.status === 'offline') {
       await maybeInsertAlert(d.id, 'offline', serial, latest);
+    }
+    if (latest.offlineCriticalBattery) {
+      await maybeInsertAlert(d.id, 'critical_battery', serial, latest);
     }
     if (latest.status === 'low') {
       await maybeInsertAlert(d.id, 'low_battery', serial, latest);

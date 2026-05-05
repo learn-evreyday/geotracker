@@ -9,6 +9,7 @@ import {
   GEOTRACKR_ONLINE_COUNT,
   GEOTRACKR_COMPANY_NAME,
   GEOTRACKR_COMPANY_SLUG,
+  CRITICAL_OFFLINE_BATTERY_SERIALS,
 } from './geotrackr.js';
 
 const DEMO_USER_EMAILS = ['user1@example.com', 'user2@example.com', 'user3@example.com'];
@@ -38,6 +39,8 @@ function buildTrackerPlans() {
         serial: `U${u}-OFFLINE-00${k}`,
         userIdx: u - 1,
         online: false,
+        /** U×-OFFLINE-001: demo critical battery offline */
+        criticalOffline: k === 1,
         name: `User ${u} Offline ${k}`,
       });
     }
@@ -94,7 +97,32 @@ async function seedOfflineTrajectory(deviceId, city) {
   }
 }
 
-async function ensureTelemetry(deviceId, online, cityIndex) {
+/** Offline trail ending with 3–9% battery (last point still >24h ago). */
+async function seedOfflineTrajectoryCritical(deviceId, city) {
+  const now = Date.now();
+  const hoursAgo = 25 + Math.random() * 47;
+  const lastT = Math.round(now - hoursAgo * 3600 * 1000);
+  const trailHours = 56 + Math.random() * 40;
+  const trailStart = Math.round(lastT - trailHours * 3600 * 1000);
+
+  let lat = city.lat + rand(-0.015, 0.015);
+  let lon = city.lon + rand(-0.02, 0.02);
+  const steps = 32;
+  const finalBat = Math.floor(3 + Math.random() * 7);
+  for (let i = 0; i < steps; i++) {
+    const ratio = steps <= 1 ? 1 : i / (steps - 1);
+    const t = Math.round(trailStart + ratio * (lastT - trailStart));
+    lat += rand(-0.0011, 0.0011);
+    lon += rand(-0.0014, 0.0014);
+    const isLast = i === steps - 1;
+    const bat = isLast
+      ? finalBat
+      : Math.round(Math.max(12, Math.min(80, 45 + rand(-20, 20))));
+    writeDeviceTelemetryPointAt(deviceId, lat, lon, bat, 'seed', new Date(t));
+  }
+}
+
+async function ensureTelemetry(deviceId, online, cityIndex, criticalOffline = false) {
   const city = pickCity(cityIndex);
   const latest = await computeLatestForDevice(deviceId);
   const now = Date.now();
@@ -111,7 +139,8 @@ async function ensureTelemetry(deviceId, online, cityIndex) {
     const age = now - new Date(latest.time).getTime();
     if (age > 24 * 3600 * 1000) return;
   }
-  await seedOfflineTrajectory(deviceId, city);
+  if (criticalOffline) await seedOfflineTrajectoryCritical(deviceId, city);
+  else await seedOfflineTrajectory(deviceId, city);
 }
 
 const GEOTRACKR_MONITOR_EMAIL = (process.env.GEOTRACKR_MONITOR_EMAIL || 'monitor@geotrackr.com').toLowerCase();
@@ -128,6 +157,7 @@ function buildGeoTrackrPlans() {
       serial: geotrackrSerial(i),
       online: i <= GEOTRACKR_ONLINE_COUNT,
       name: `GeoTrackr Device ${i}`,
+      criticalOffline: i === 7 || i === 8,
     });
   }
   return plans;
@@ -180,7 +210,29 @@ async function seedGeoOfflineTrajectory(deviceId, city) {
   }
 }
 
-async function ensureGeoTelemetry(deviceId, online, cityIndex) {
+async function seedGeoOfflineTrajectoryCritical(deviceId, city) {
+  const now = Date.now();
+  const hoursAgo = 24 + Math.random() * 48;
+  const lastT = Math.round(now - hoursAgo * 3600 * 1000);
+  const trailHours = 40 + Math.random() * 48;
+  const trailStart = Math.round(lastT - trailHours * 3600 * 1000);
+
+  let lat = city.lat + rand(-0.015, 0.015);
+  let lon = city.lon + rand(-0.02, 0.02);
+  const steps = 36;
+  const finalBat = Math.floor(3 + Math.random() * 7);
+  for (let i = 0; i < steps; i++) {
+    const ratio = steps <= 1 ? 1 : i / (steps - 1);
+    const t = Math.round(trailStart + ratio * (lastT - trailStart));
+    lat += rand(-0.0011, 0.0011);
+    lon += rand(-0.0014, 0.0014);
+    const isLast = i === steps - 1;
+    const bat = isLast ? finalBat : Math.round(rand(15, 75));
+    writeDeviceTelemetryPointAt(deviceId, lat, lon, bat, 'seed', new Date(t));
+  }
+}
+
+async function ensureGeoTelemetry(deviceId, online, cityIndex, criticalOffline = false) {
   const city = pickCity(cityIndex);
   const latest = await computeLatestForDevice(deviceId);
   const now = Date.now();
@@ -196,7 +248,8 @@ async function ensureGeoTelemetry(deviceId, online, cityIndex) {
     const age = now - new Date(latest.time).getTime();
     if (age > 24 * 3600 * 1000) return;
   }
-  await seedGeoOfflineTrajectory(deviceId, city);
+  if (criticalOffline) await seedGeoOfflineTrajectoryCritical(deviceId, city);
+  else await seedGeoOfflineTrajectory(deviceId, city);
 }
 
 async function seedGeoTrackrFleet() {
@@ -240,7 +293,7 @@ async function seedGeoTrackrFleet() {
       monitorId,
     ]);
 
-    await ensureGeoTelemetry(deviceId, plan.online, i);
+    await ensureGeoTelemetry(deviceId, plan.online, i, plan.criticalOffline);
   }
 
   console.log(`seed: GeoTrackr fleet (${GEOTRACKR_FLEET_SIZE} devices) ok`);
@@ -282,6 +335,68 @@ async function seedGeoTrackrCompany() {
     );
   }
   console.log('seed: GeoTrackr company links ok');
+}
+
+/**
+ * Ensures the five demo “critical offline battery” trackers have a last Influx point that is
+ * still >24h old but carries 3–9% battery (and does not add a recent point that would mark them online).
+ */
+async function ensureCriticalOfflineFinalInfluxPoint(deviceId) {
+  let latest;
+  try {
+    latest = await computeLatestForDevice(deviceId);
+  } catch {
+    return;
+  }
+  const now = Date.now();
+  const minOfflineAge = 25 * 3600 * 1000;
+  const lastTime = latest?.time ? new Date(latest.time).getTime() : 0;
+
+  if (lastTime && now - lastTime < 24 * 3600 * 1000) return;
+
+  if (
+    latest.status === 'offline' &&
+    typeof latest.batteryPercent === 'number' &&
+    latest.batteryPercent < 10
+  ) {
+    return;
+  }
+
+  let lat = latest.latitude;
+  let lon = latest.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    const city = pickCity(0);
+    lat = city.lat + rand(-0.015, 0.015);
+    lon = city.lon + rand(-0.02, 0.02);
+  }
+
+  let targetT;
+  if (lastTime > 0) {
+    targetT = lastTime + 60_000 + Math.floor(Math.random() * 120_000);
+  } else {
+    targetT = now - minOfflineAge - Math.random() * 48 * 3600 * 1000;
+  }
+  if (now - targetT < 24 * 3600 * 1000) {
+    targetT = now - minOfflineAge - Math.random() * 3600 * 1000;
+  }
+  if (lastTime > 0 && targetT <= lastTime) {
+    targetT = lastTime + 60_000;
+    if (now - targetT < 24 * 3600 * 1000) return;
+  }
+
+  const bat = Math.floor(3 + Math.random() * 7);
+  writeDeviceTelemetryPointAt(deviceId, lat, lon, bat, 'seed', new Date(targetT));
+}
+
+async function ensureCriticalOfflineDemoPoints() {
+  for (const serialRaw of CRITICAL_OFFLINE_BATTERY_SERIALS) {
+    const serial = normalizeSerial(serialRaw);
+    if (!serial) continue;
+    const dr = await query(`SELECT id FROM devices WHERE serial_number=$1 LIMIT 1`, [serial]);
+    const deviceId = dr.rows[0]?.id;
+    if (!deviceId) continue;
+    await ensureCriticalOfflineFinalInfluxPoint(deviceId);
+  }
 }
 
 /**
@@ -354,13 +469,15 @@ export async function seedDemo() {
       console.log(`seed: device ${serial}`);
     }
 
-    await ensureTelemetry(deviceId, plan.online, cityIdx);
+    await ensureTelemetry(deviceId, plan.online, cityIdx, Boolean(plan.criticalOffline));
     cityIdx += 1;
   }
 
   await seedGeoTrackrFleet();
   await seedGeoTrackrCompany();
 
+  await flushWrites();
+  await ensureCriticalOfflineDemoPoints();
   await flushWrites();
   console.log('seed: demo telemetry flush ok');
 }

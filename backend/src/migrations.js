@@ -117,6 +117,10 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS alerts_device_id_idx ON alerts(device_id);
   CREATE INDEX IF NOT EXISTS alerts_created_at_idx ON alerts(created_at DESC);
   `,
+  `
+  ALTER TABLE alerts DROP CONSTRAINT IF EXISTS alerts_type_check;
+  ALTER TABLE alerts ADD CONSTRAINT alerts_type_check CHECK (type IN ('offline', 'low_battery', 'critical_battery'));
+  `,
 ];
 
 export async function runMigrations() {

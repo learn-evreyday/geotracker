@@ -41,6 +41,7 @@ export async function listOfflineDevices(req, res) {
       last_known_latitude: latest.latitude,
       last_known_longitude: latest.longitude,
       battery_percent: latest.batteryPercent,
+      offline_critical_battery: Boolean(latest.offlineCriticalBattery),
     });
   }
 

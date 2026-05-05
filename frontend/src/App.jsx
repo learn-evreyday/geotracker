@@ -184,6 +184,28 @@ function computeTrackerStatus(l) {
   return l.status === 'active' ? 'active' : 'offline';
 }
 
+/** Map marker hue: offline + last battery &lt;10% is deeper red than plain offline. */
+function mapMarkerStatusFromLatest(l) {
+  if (!l) return 'offline';
+  if (l.status === 'offline') {
+    const crit =
+      l.offlineCriticalBattery ||
+      (typeof l.batteryPercent === 'number' && l.batteryPercent >= 0 && l.batteryPercent < 10);
+    return crit ? 'offline_critical' : 'offline';
+  }
+  const battery = typeof l.batteryPercent === 'number' ? l.batteryPercent : null;
+  if (battery != null && battery < 20) return 'low';
+  return l.status === 'active' ? 'active' : 'offline';
+}
+
+function isOfflineCriticalBattery(l) {
+  if (!l || l.status !== 'offline') return false;
+  return Boolean(
+    l.offlineCriticalBattery ||
+      (typeof l.batteryPercent === 'number' && l.batteryPercent >= 0 && l.batteryPercent < 10)
+  );
+}
+
 function formatTrackerLocationLine(l) {
   if (!l || !Number.isFinite(l.latitude) || !Number.isFinite(l.longitude)) return '—';
   const city = estimateCityNearCoords(l.latitude, l.longitude);
@@ -234,6 +256,10 @@ function MapLegend() {
         <li className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 ring-1 ring-red-900/25" />
           {t('mapLegendOffline')}
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-800 ring-2 ring-red-950/40" />
+          {t('mapLegendOfflineCritical')}
         </li>
         <li className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 ring-1 ring-amber-800/30" />
@@ -338,10 +364,16 @@ function AlertsBell() {
                           className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                             al.type === 'offline'
                               ? 'bg-red-50 text-red-700 ring-1 ring-red-100'
-                              : 'bg-amber-50 text-amber-800 ring-1 ring-amber-100'
+                              : al.type === 'critical_battery'
+                                ? 'bg-red-100 text-red-900 ring-1 ring-red-200'
+                                : 'bg-amber-50 text-amber-800 ring-1 ring-amber-100'
                           }`}
                         >
-                          {al.type === 'offline' ? t('offline') : t('lowBattery')}
+                          {al.type === 'offline'
+                            ? t('offline')
+                            : al.type === 'critical_battery'
+                              ? t('criticalBatteryAlert')
+                              : t('lowBattery')}
                         </span>
                         <span className="text-[10px] text-gray-400">{formatTime(al.created_at)}</span>
                       </div>
@@ -392,6 +424,7 @@ function statusFromLatest(latest, lowBattery = 20) {
 function markerColor(status) {
   if (status === 'low') return '#f59e0b';
   if (status === 'active') return '#22c55e';
+  if (status === 'offline_critical') return '#991b1b';
   return '#ef4444';
 }
 
@@ -447,7 +480,13 @@ function MarkerClusterLayer({ points, highlightSerial, markersRef, popupLabels }
       const histPath = `/history?serial=${encodeURIComponent(serialKey)}&range=7d`;
       const mapPath = `/trackers/${encodeURIComponent(serialKey)}/map`;
       const statusText =
-        p.status === 'low' ? popupLabels.lowBattery : p.status === 'active' ? popupLabels.active : popupLabels.offline;
+        p.status === 'low'
+          ? popupLabels.lowBattery
+          : p.status === 'active'
+            ? popupLabels.active
+            : p.status === 'offline_critical'
+              ? popupLabels.criticalBatteryOffline
+              : popupLabels.offline;
       const locLine = `<div><span style="opacity:.75">${escapeHtml(popupLabels.lastKnownLocation)}:</span> ${formatCoord(p.latitude)}, ${formatCoord(p.longitude)}</div>`;
       m.bindPopup(
         `<div style="font-family: Inter, system-ui; font-size: 12px; min-width: 200px; color:#111827;">
@@ -772,6 +811,7 @@ function DashboardPage() {
       active: t('active'),
       offline: t('offline'),
       lowBattery: t('lowBattery'),
+      criticalBatteryOffline: t('criticalBatteryOffline'),
     }),
     [t]
   );
@@ -842,12 +882,7 @@ function DashboardPage() {
         const l = latestById[d.id];
         if (!l || !Number.isFinite(l.latitude) || !Number.isFinite(l.longitude)) return null;
         const battery = typeof l.batteryPercent === 'number' ? l.batteryPercent : null;
-        const status =
-          l.status === 'offline'
-            ? 'offline'
-            : battery != null && battery < 20
-              ? 'low'
-              : l.status || 'offline';
+        const status = mapMarkerStatusFromLatest(l);
         return {
           ...d,
           latitude: l.latitude,
@@ -864,7 +899,7 @@ function DashboardPage() {
     if (mapFilter === 'all') return points;
     return points.filter((p) => {
       if (mapFilter === 'active') return p.status === 'active';
-      if (mapFilter === 'offline') return p.status === 'offline';
+      if (mapFilter === 'offline') return p.status === 'offline' || p.status === 'offline_critical';
       if (mapFilter === 'low') return p.status === 'low';
       return true;
     });
@@ -877,15 +912,9 @@ function DashboardPage() {
     for (const d of devices) {
       const l = latestById[d.id];
       if (!l) continue;
-      const battery = typeof l.batteryPercent === 'number' ? l.batteryPercent : null;
-      const st =
-        l.status === 'offline'
-          ? 'offline'
-          : battery != null && battery < 20
-            ? 'low'
-            : l.status || 'offline';
+      const st = mapMarkerStatusFromLatest(l);
       if (st === 'active') online += 1;
-      else if (st === 'offline') offline += 1;
+      else if (st === 'offline' || st === 'offline_critical') offline += 1;
       else if (st === 'low') low += 1;
     }
     return { total: devices.length, online, offline, low };
@@ -1137,10 +1166,16 @@ function DashboardPage() {
                         className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                           al.type === 'offline'
                             ? 'bg-red-50 text-red-700 ring-1 ring-red-100'
-                            : 'bg-amber-50 text-amber-800 ring-1 ring-amber-100'
+                            : al.type === 'critical_battery'
+                              ? 'bg-red-100 text-red-900 ring-1 ring-red-200'
+                              : 'bg-amber-50 text-amber-800 ring-1 ring-amber-100'
                         }`}
                       >
-                        {al.type === 'offline' ? t('offline') : t('lowBattery')}
+                        {al.type === 'offline'
+                          ? t('offline')
+                          : al.type === 'critical_battery'
+                            ? t('criticalBatteryAlert')
+                            : t('lowBattery')}
                       </span>
                       <span className="font-mono text-xs font-semibold text-gray-900">{al.serial_number}</span>
                     </div>
@@ -1484,7 +1519,21 @@ function OfflineInvestigationPage() {
                         ? `${formatCoord(d.last_known_latitude)}, ${formatCoord(d.last_known_longitude)}`
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 text-gray-900">{d.battery_percent != null ? `${d.battery_percent}%` : '—'}</td>
+                    <td
+                      className={`px-4 py-3 font-semibold ${
+                        d.offline_critical_battery ||
+                        (typeof d.battery_percent === 'number' && d.battery_percent < 10)
+                          ? 'text-red-700'
+                          : 'text-gray-900'
+                      }`}
+                    >
+                      {d.battery_percent != null ? `${d.battery_percent}%` : '—'}
+                      {d.offline_critical_battery ? (
+                        <span className="ml-2 inline-block rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800 ring-1 ring-red-100">
+                          {t('criticalBatteryBadge')}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -1759,9 +1808,8 @@ function TrackerMapPage() {
       .map((p) => [p.latitude, p.longitude]);
   }, [history]);
 
-  const lastIsOffline =
-    Boolean(latest?.time) && Date.now() - new Date(latest.time).getTime() > 24 * 3600 * 1000;
-  const markerHue = lastIsOffline ? '#ef4444' : '#22c55e';
+  const mapSt = latest ? mapMarkerStatusFromLatest(latest) : 'offline';
+  const markerHue = markerColor(mapSt);
 
   if (busy && !err) {
     return (
@@ -1824,6 +1872,7 @@ function TrackerMapPage() {
       : batteryNum != null && batteryNum < 20
         ? 'low'
         : latest?.status || 'offline';
+  const critOffline = isOfflineCriticalBattery(latest);
   const badgeClass =
     rawStatus === 'active'
       ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
@@ -1901,9 +1950,16 @@ function TrackerMapPage() {
 
               <div className="mt-4">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('statusLabel')}</div>
-                <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>
-                  {statusLabel}
-                </span>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>
+                    {statusLabel}
+                  </span>
+                  {critOffline ? (
+                    <span className="inline-flex rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-900 ring-1 ring-red-200">
+                      {t('criticalBatteryBadge')}
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <dl className="mt-5 space-y-4 text-sm">
@@ -1912,7 +1968,9 @@ function TrackerMapPage() {
                     <Battery className="h-3.5 w-3.5 text-accent" />
                     {t('battery')}
                   </dt>
-                  <dd className="mt-1 font-semibold text-gray-900">
+                  <dd
+                    className={`mt-1 font-semibold ${critOffline ? 'text-red-700' : 'text-gray-900'}`}
+                  >
                     {latest?.batteryPercent != null ? `${latest.batteryPercent}%` : '—'}
                   </dd>
                 </div>
@@ -2245,6 +2303,7 @@ function TrackersPage() {
             const l = latestById[d.id];
             const battery = typeof l?.batteryPercent === 'number' ? l.batteryPercent : null;
             const statusKey = computeTrackerStatus(l);
+            const critOffline = isOfflineCriticalBattery(l);
             const statusLabel =
               statusKey === 'active' ? t('active') : statusKey === 'low' ? t('lowBattery') : t('offline');
             const badgeClass =
@@ -2285,15 +2344,26 @@ function TrackersPage() {
                       </p>
                     ) : null}
                   </div>
-                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${badgeClass}`}>
-                    {statusLabel}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${badgeClass}`}>
+                      {statusLabel}
+                    </span>
+                    {critOffline ? (
+                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-900 ring-1 ring-red-200">
+                        {t('criticalBatteryBadge')}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
                   <div>
                     <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('battery')}</div>
-                    <div className="mt-1 font-semibold text-gray-900">{battery != null ? `${battery}%` : '—'}</div>
+                    <div
+                      className={`mt-1 font-semibold ${critOffline ? 'text-red-700' : 'text-gray-900'}`}
+                    >
+                      {battery != null ? `${battery}%` : '—'}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('lastSeen')}</div>
@@ -2423,6 +2493,8 @@ function DeviceDetailsPage() {
     return pts.map((p) => ({ t: new Date(p.t).toLocaleTimeString(), v: p.batteryPercent }));
   }, [history]);
 
+  const mapSt = latest ? mapMarkerStatusFromLatest(latest) : 'offline';
+  const critOffline = isOfflineCriticalBattery(latest);
   const statusLabel =
     latest?.status === 'low'
       ? t('lowBattery')
@@ -2523,11 +2595,20 @@ function DeviceDetailsPage() {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-gray-500">{t('statusLabel')}</dt>
-              <dd>{statusLabel}</dd>
+              <dd className="text-right">
+                <span className="font-medium">{statusLabel}</span>
+                {critOffline ? (
+                  <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-red-700">
+                    {t('criticalBatteryBadge')}
+                  </span>
+                ) : null}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-gray-500">{t('battery')}</dt>
-              <dd>{latest?.batteryPercent != null ? `${latest.batteryPercent}%` : '—'}</dd>
+              <dd className={critOffline ? 'font-semibold text-red-700' : ''}>
+                {latest?.batteryPercent != null ? `${latest.batteryPercent}%` : '—'}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-gray-500">{t('lastSeen')}</dt>
@@ -2568,12 +2649,13 @@ function DeviceDetailsPage() {
             >
               <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.9 }} />}
-              <Marker position={[latest.latitude, latest.longitude]} icon={markerIcon(markerColor(latest.status))}>
+              <Marker position={[latest.latitude, latest.longitude]} icon={markerIcon(markerColor(mapSt))}>
                 <Popup>
                   <div className="text-xs">
                     <div className="font-semibold">{device.name}</div>
                     <div>
                       {device.serial_number} — {statusLabel}
+                      {critOffline ? ` · ${t('criticalBatteryOffline')}` : ''}
                     </div>
                   </div>
                 </Popup>
@@ -2675,7 +2757,9 @@ function AdminDevicesPage() {
                       ? t('lowBattery')
                       : d.latest?.status === 'active'
                         ? t('active')
-                        : t('offline')}
+                        : d.latest?.offlineCriticalBattery
+                          ? `${t('offline')} · ${t('criticalBatteryBadge')}`
+                          : t('offline')}
                   </td>
                   <td className="py-3 text-xs text-gray-600">{d.lastSeen ? formatTime(d.lastSeen) : '—'}</td>
                   <td className="py-3 pr-4 text-right">

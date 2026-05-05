@@ -45,6 +45,11 @@ from(bucket: "${bucket}")
     out.batteryPercent < 20;
   // Stale trackers are offline even if battery was low at last transmission.
   out.status = !active ? 'offline' : low ? 'low' : 'active';
+  out.offlineCriticalBattery =
+    !active &&
+    typeof out.batteryPercent === 'number' &&
+    out.batteryPercent >= 0 &&
+    out.batteryPercent < 10;
   return out;
 }
 
