@@ -516,8 +516,8 @@ function Shell({ auth, children }) {
     }`;
 
   return (
-    <div className="flex h-full bg-[#F8FAFC] text-gray-900">
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
+    <div className="flex min-h-screen w-full bg-[#F8FAFC] text-gray-900">
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white md:sticky md:top-0 md:max-h-screen md:self-start md:overflow-y-auto">
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-md ring-2 ring-white">
@@ -605,7 +605,7 @@ function Shell({ auth, children }) {
           </div>
           <AlertsBell />
         </header>
-        <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-t border-gray-200 bg-white px-2 py-2 md:hidden">
         <NavLink
           to="/"
@@ -693,7 +693,7 @@ function LoginPage({ auth }) {
   }, [t]);
 
   return (
-    <div className="flex h-full items-center justify-center bg-[#F8FAFC] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4">
       <div className="w-full max-w-md rounded-[22px] border border-gray-100 bg-white p-8 shadow-cardHover">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg ring-4 ring-violet-100">
@@ -1036,7 +1036,7 @@ function DashboardPage() {
   }, [devices, latestById, focusSerial, focusSerialRaw, searchParams, setSearchParams, t]);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-[#F8FAFC]">
+    <div className="relative flex flex-col bg-[#F8FAFC] pb-8">
       {err && (
         <div className="absolute left-4 right-4 top-3 z-[50] rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 shadow-card md:left-auto md:right-8 md:top-4 md:max-w-md">
           {err}
@@ -1161,9 +1161,9 @@ function DashboardPage() {
         ) : null}
       </div>
 
-      <div className="relative min-h-0 flex flex-1 flex-col">
-      <div className="pointer-events-none absolute left-0 right-0 top-0 z-[45] flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between md:px-6 md:pt-5">
-        <div ref={searchWrapRef} className="pointer-events-auto relative w-full max-w-md">
+      <div className="sticky top-0 z-[45] shrink-0 border-b border-gray-100/90 bg-[#F8FAFC]/95 px-4 py-3 backdrop-blur-md md:px-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div ref={searchWrapRef} className="relative w-full max-w-md">
           <input
             type="search"
             className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-4 pr-4 text-sm text-gray-900 shadow-card outline-none ring-accent/20 transition placeholder:text-gray-400 focus:border-accent focus:ring-2"
@@ -1196,7 +1196,7 @@ function DashboardPage() {
           )}
         </div>
 
-        <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-card backdrop-blur-sm md:py-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-card md:py-2">
           <label className="flex items-center gap-2 text-xs font-medium text-gray-500">
             {t('mapFilter')}
             <select
@@ -1225,15 +1225,20 @@ function DashboardPage() {
             </select>
           </label>
         </div>
+        </div>
       </div>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative mx-4 mt-3 md:mx-6 md:mt-4">
         {devices.length === 0 && !err && (
-          <div className="absolute inset-0 z-[40] flex items-center justify-center bg-[#F8FAFC]/95 p-6">
+          <div className="absolute inset-0 z-[40] flex items-center justify-center rounded-[22px] bg-[#F8FAFC]/95 p-6">
             <EmptyState title={t('emptyNoTrackers')} subtitle={t('emptyNoTrackersHint')} />
           </div>
         )}
-        <MapContainer center={[45.9432, 24.9668]} zoom={6} className="h-full w-full">
+        <MapContainer
+          center={[45.9432, 24.9668]}
+          zoom={6}
+          className="z-0 min-h-[380px] h-[58vh] max-h-[640px] w-full rounded-[22px] border border-gray-100 bg-white shadow-card"
+        >
           <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <style>{`
             @keyframes dmPulse {
@@ -1283,7 +1288,6 @@ function DashboardPage() {
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
-      </div>
       </div>
     </div>
   );
@@ -1438,7 +1442,7 @@ function OfflineInvestigationPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-[#F8FAFC]">
+    <div className="flex min-h-full flex-col bg-[#F8FAFC]">
       <div className="border-b border-gray-200 bg-white px-4 py-5 shadow-sm md:px-8">
         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('navOfflineInvestigation')}</div>
         <div className="mt-1 text-xl font-semibold text-gray-900">{t('offlineInvestigationTitle')}</div>
@@ -1449,7 +1453,7 @@ function OfflineInvestigationPage() {
           {err}
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto p-4 md:p-8">
+      <div className="p-4 md:p-8">
         {busy ? (
           <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : !rows.length ? (
@@ -1572,7 +1576,7 @@ function HistoryPage() {
   const lastMarkerColor = lastIsOffline ? '#ef4444' : '#22c55e';
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-[#F8FAFC]">
+    <div className="flex min-h-full flex-col bg-[#F8FAFC]">
       <div className="border-b border-gray-200 bg-white px-4 py-5 shadow-sm md:px-8">
         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('navHistory')}</div>
         <div className="mt-1 text-xl font-semibold text-gray-900">{t('historyTitle')}</div>
@@ -1607,9 +1611,13 @@ function HistoryPage() {
         )}
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 p-4 md:p-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 p-4 md:p-8 lg:grid-cols-2">
         <div className="min-h-[320px] overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-card lg:min-h-[480px]">
-          <MapContainer center={[45.9432, 24.9668]} zoom={6} className="h-full min-h-[320px] w-full">
+          <MapContainer
+            center={[45.9432, 24.9668]}
+            zoom={6}
+            className="min-h-[320px] h-[50vh] max-h-[520px] w-full lg:min-h-[480px] lg:h-[480px]"
+          >
             <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.9 }} />}
             {last && Number.isFinite(last.latitude) && Number.isFinite(last.longitude) && (
@@ -1757,7 +1765,7 @@ function TrackerMapPage() {
 
   if (busy && !err) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#F8FAFC] p-8 text-sm text-gray-500">
+      <div className="flex min-h-[50vh] items-center justify-center bg-[#F8FAFC] p-8 text-sm text-gray-500">
         {t('loading')}
       </div>
     );
@@ -1765,7 +1773,7 @@ function TrackerMapPage() {
 
   if (err === 'not_found') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8 text-center">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8 text-center">
         <p className="text-gray-900">{t('toastTrackerNotFound')}</p>
         <Link
           to="/"
@@ -1780,7 +1788,7 @@ function TrackerMapPage() {
 
   if (err === 'forbidden') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8 text-center">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8 text-center">
         <p className="text-gray-900">{t('toastTrackerNoAccess')}</p>
         <Link
           to="/"
@@ -1795,7 +1803,7 @@ function TrackerMapPage() {
 
   if (err === 'other') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-8">
         <p className="text-sm text-red-600">{t('errorGeneric')}</p>
         <Link to="/" className="text-sm font-medium text-accent hover:underline">
           {t('backToDashboard')}
@@ -1828,7 +1836,7 @@ function TrackerMapPage() {
   return (
     <>
       <SerialCopiedToast visible={serialToast} message={t('serialCopiedToast')} />
-      <div className="flex h-full min-h-0 flex-col overflow-auto bg-[#F8FAFC] p-4 md:p-6">
+      <div className="flex flex-col bg-[#F8FAFC] p-4 pb-10 md:p-6">
         <div className="mb-4 flex justify-end">
           <select
             className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 shadow-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
@@ -1844,10 +1852,14 @@ function TrackerMapPage() {
           </select>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col-reverse gap-6 lg:flex-row lg:items-stretch lg:gap-8">
-          <div className="flex min-h-[min(56vh,520px)] flex-1 flex-col overflow-hidden rounded-[22px] border border-gray-100 bg-white shadow-card lg:min-h-[520px]">
+        <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-stretch lg:gap-8">
+          <div className="flex w-full flex-col rounded-[22px] border border-gray-100 bg-white shadow-card lg:min-w-0 lg:flex-1">
             {hasLoc ? (
-              <MapContainer center={center} zoom={14} className="h-full w-full min-h-[380px] flex-1">
+              <MapContainer
+                center={center}
+                zoom={14}
+                className="min-h-[380px] h-[55vh] max-h-[640px] w-full rounded-[22px]"
+              >
                 <TileLayer
                   attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -2116,7 +2128,7 @@ function TrackersPage() {
   return (
     <>
       <SerialCopiedToast visible={serialToast} message={t('serialCopiedToast')} />
-      <div className="h-full overflow-auto bg-[#F8FAFC] pb-12 pt-2 md:pt-4">
+      <div className="min-h-full w-full bg-[#F8FAFC] pb-12 pt-2 md:pt-4">
         <div className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 md:mb-6 md:px-8">
           <label className="flex items-center gap-2 text-sm font-medium text-gray-500">
             {t('refresh')}
@@ -2451,7 +2463,7 @@ function DeviceDetailsPage() {
   const hasHistoryPoints = (history?.points?.length || 0) > 0;
 
   return (
-    <div className="h-full overflow-auto bg-[#F8FAFC]">
+    <div className="min-h-full w-full bg-[#F8FAFC]">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white p-4 shadow-sm md:p-6">
         <div>
           <button type="button" className="text-sm font-medium text-accent hover:underline" onClick={() => nav('/trackers')}>
@@ -2624,7 +2636,7 @@ function AdminDevicesPage() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#F8FAFC]">
+    <div className="flex min-h-full flex-col bg-[#F8FAFC]">
       <div className="border-b border-gray-200 bg-white px-4 py-5 shadow-sm md:px-8">
         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('navAdminDevices')}</div>
         <div className="mt-1 text-xl font-semibold text-gray-900">{t('adminDevicesTitle')}</div>
@@ -2634,7 +2646,7 @@ function AdminDevicesPage() {
           {err}
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto p-4 md:p-8">
+      <div className="p-4 md:p-8">
         <div className="overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-card">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -2720,7 +2732,7 @@ function SettingsPage() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-[#F8FAFC] p-6 md:p-10">
+    <div className="min-h-full w-full bg-[#F8FAFC] p-6 md:p-10">
       <div className="mx-auto max-w-lg space-y-6">
         <div>
           <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('navSettings')}</div>
@@ -2802,7 +2814,7 @@ function AdminUsersPage() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#F8FAFC]">
+    <div className="flex min-h-full flex-col bg-[#F8FAFC]">
       <div className="border-b border-gray-200 bg-white px-4 py-5 shadow-sm md:px-8">
         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{t('navAdminUsers')}</div>
         <div className="mt-1 text-xl font-semibold text-gray-900">{t('adminUsersTitle')}</div>
@@ -2812,7 +2824,7 @@ function AdminUsersPage() {
           {err}
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto p-4 md:p-8">
+      <div className="p-4 md:p-8">
         <div className="overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-card">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
