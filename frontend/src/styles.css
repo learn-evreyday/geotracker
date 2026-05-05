@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+body {
+  @apply bg-[#F8FAFC] font-sans text-gray-900 antialiased;
+  @apply dark:bg-[#0b0f1a] dark:text-white;
+  @apply transition-colors duration-200;
+}
+
+@layer components {
+  .ui-surface {
+    @apply border border-gray-200 bg-white text-gray-900;
+    @apply dark:border-white/10 dark:bg-white/5 dark:text-white;
+  }
+
+  .ui-sidebar {
+    @apply bg-white border-r border-gray-200;
+    @apply dark:bg-[#0f1526] dark:border-white/10;
+  }
+
+  .ui-topbar {
+    @apply bg-white border-b border-gray-200;
+    @apply dark:bg-[#0f1526] dark:border-white/10;
+  }
+
+  .ui-card {
+    @apply rounded-[20px] border border-gray-100 bg-white shadow-card;
+    @apply dark:border-white/10 dark:bg-white/5 dark:shadow-none;
+  }
+
+  .ui-card-hover {
+    @apply transition duration-200 hover:-translate-y-1 hover:shadow-cardHover;
+    @apply dark:hover:shadow-[0_10px_40px_-16px_rgba(139,92,246,0.35)];
+  }
+
+  .ui-input {
+    @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400;
+    @apply focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40;
+    @apply dark:focus:ring-accent/25;
+    @apply transition-colors duration-200;
+  }
+
+  .ui-select {
+    @apply w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 shadow-sm outline-none;
+    @apply focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply dark:border-white/10 dark:bg-white/5 dark:text-white dark:shadow-none;
+    @apply transition-colors duration-200;
+  }
+
+  .ui-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition duration-200;
+  }
+
+  .ui-btn-primary {
+    @apply ui-btn text-white shadow-sm;
+    @apply bg-gradient-to-r from-[#8b5cf6] to-[#2563eb] hover:brightness-110 active:brightness-95;
+  }
+
+  .ui-btn-ghost {
+    @apply ui-btn border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50;
+    @apply dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:shadow-none;
+  }
+
+  .ui-badge {
+    @apply inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1;
+  }
+}
